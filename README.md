@@ -1,2 +1,2 @@
 # FLaskDeliveryFoodApp
-yes, it is!
+This is a Flask delivery app with SQLAlchemy. This is project by course of Stepik
