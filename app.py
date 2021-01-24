@@ -1,3 +1,5 @@
+import datetime
+
 from flask import Flask, render_template, redirect, session, request
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
@@ -5,7 +7,7 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from delivery_food.forms import UserForm, AuthForm, CartForm
+from forms import UserForm, AuthForm, CartForm
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
@@ -62,12 +64,14 @@ class Order(db.Model):
     date = db.Column(db.String, nullable=False)
     summ = db.Column(db.Integer, nullable=False)
     status = db.Column(db.String, nullable=False)
-    dishs = db.Column(db.String)
+    dishs = db.Column(db.String, nullable=False)
     user_mail = db.Column(db.String, db.ForeignKey("users.mail"))
     user = db.relationship("User", back_populates="orders")
 
 
+db.create_all()
 admin.add_view(ModelView(User, db.session))
+admin.add_view(ModelView(Order, db.session))
 
 
 @app.route('/')
@@ -84,10 +88,14 @@ def main():
                            )
 
 
-@app.route('/cart/')
+@app.route('/cart/', methods=['GET', 'POST'])
 def cart():
+    is_del = False
+    if session.get('delete'):
+        is_del = True
+        session['delete'] = False
     form = CartForm()
-    dish_list = [db.session.query(Dish).get(i) for i in session['cart']]
+    dish_list = [db.session.query(Dish).get(i) for i in session.get('cart', [])]
     summ = 0
     for dish in dish_list:
         summ += dish.price
@@ -100,19 +108,24 @@ def cart():
         status = "Выполняется"
         order_form = Order(name=name,
                            address=address,
-                           user_mail=user_mail,
                            phone=phone,
-                           dishs=dishs,
+                           date=date,
                            summ=summ,
-                           date=date)
+                           status=status,
+                           dishs=",".join(str(dish.id) for dish in dish_list),
+                           user_mail=user_mail
+                           )
         db.session.add(order_form)
         db.session.commit()
+        session['cart'] = []
+        return redirect('/ordered/')
     else:
         return render_template('cart.html',
-                               cart=session['cart'],
+                               cart=session.get('cart', []),
                                dish_list=dish_list,
                                len=len(dish_list),
                                summ=summ,
+                               delete=is_del,
                                is_auth=session.get('is_auth', False),
                                form=form
                                )
@@ -120,7 +133,11 @@ def cart():
 
 @app.route('/account/')
 def account():
-    return render_template('account.html')
+    if session.get('is_auth', False):
+        user = db.session.query(User).get(session['user_id'])
+        orders = user.orders
+        return render_template('account.html', orders=orders, db=db, Dish=Dish)
+    return redirect('/auth/')
 
 
 @app.route('/register/', methods=['GET', 'POST'])
@@ -141,28 +158,28 @@ def register():
 
 @app.route('/auth/', methods=['GET', 'POST'])
 def login():
-    form = AuthForm()
-    if request.method == "POST":
-        user = User.query.filter_by(mail=form.mail.data).first()
-        if user.mail == form.mail.data and user.password_valid(form.password.data):
-            session["user_id"] = user.id
-            session['is_auth'] = True
-            return redirect("/account/")
-
-    return render_template("auth.html", form=form)
+    if session.get("user_id"):
+        return redirect("/account/")
+    else:
+        form = AuthForm()
+        if request.method == "POST":
+            user = db.session.query(User).filter(User.mail == form.mail.data).first()
+            if user.mail and user.password_valid(form.password.data):
+                session["user_id"] = user.id
+                session["is_auth"] = True
+                return redirect("/account/")
+        return render_template("auth.html", form=form)
 
 
 @app.route('/logout/')
 def logout():
     if session.get('user_id'):
         session.pop('user_id')
-    return redirect('/login/')
+    return redirect('/auth/')
 
 
-@app.route('/ordered/', methods=['GET', 'POST'])
+@app.route('/ordered/')
 def ordered():
-    if request.method == 'POST':
-        db.session.add(Order())
     return render_template('ordered.html')
 
 
@@ -179,6 +196,7 @@ def deletetocart(dish_id):
     cart = session.get('cart', [])
     cart.remove(dish_id)
     session['cart'] = cart
+    session['delete'] = True
     return redirect('/cart/')
 
 
