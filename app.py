@@ -200,10 +200,6 @@ def deletetocart(dish_id):
     return redirect('/cart/')
 
 
-@app.route('/clear/')
-def cc():
-    session.clear()
-    return redirect('/')
 
 
 if __name__ == '__main__':
