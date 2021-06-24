@@ -1,7 +1,5 @@
 import csv
-from pprint import pprint
 from app import db, Dish
-for categories
 with open('delivery_categories.csv', newline='', encoding='utf-8') as csvfile:
     spamreader = csv.reader(csvfile, delimiter=' ', quotechar='|')
     date = []
