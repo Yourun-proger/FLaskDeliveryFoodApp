@@ -200,7 +200,5 @@ def deletetocart(dish_id):
     return redirect('/cart/')
 
 
-
-
 if __name__ == '__main__':
     app.run()
